@@ -26,7 +26,12 @@ _request_log: dict[str, deque[float]] = defaultdict(deque)
 
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
-    client_ip = (request.headers.get("x-forwarded-for") or request.client.host or "anonymous").split(",")[0].strip()
+    client_ip = (
+        request.headers.get("x-forwarded-for")
+        or request.headers.get("x-real-ip")
+        or request.client.host
+        or "anonymous"
+    ).split(",")[0].strip()
     now = time.time()
     window = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     limit = int(os.getenv("RATE_LIMIT_REQUESTS", "120"))
