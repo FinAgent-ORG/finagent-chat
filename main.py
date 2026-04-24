@@ -1,6 +1,7 @@
 import os
 import time
 from collections import defaultdict, deque
+from typing import Annotated
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -49,12 +50,13 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/api/v1/chat/messages", response_model=ChatResponse)
+@app.post("/api/v1/chat/messages")
 async def chat(
     payload: ChatRequest,
-    current_user: dict = Depends(require_user),
-    token: str = Depends(oauth2_scheme),
+    current_user: Annotated[dict, Depends(require_user)],
+    token: Annotated[str, Depends(oauth2_scheme)],
 ) -> ChatResponse:
+    del current_user
     try:
         response_text = await handle_chat(
             history=[item.model_dump() for item in payload.history],
