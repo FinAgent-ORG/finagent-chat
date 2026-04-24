@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from agent import build_messages, react_graph
+from agent import handle_chat
 from schemas import ChatRequest, ChatResponse
 from security import oauth2_scheme, require_user
 
@@ -56,19 +56,15 @@ async def chat(
     token: str = Depends(oauth2_scheme),
 ) -> ChatResponse:
     try:
-        result = await react_graph.ainvoke(
-            {"messages": build_messages(payload.history, payload.message)},
-            config={"configurable": {"token": token, "user_id": current_user["sub"]}},
+        response_text = await handle_chat(
+            history=[item.model_dump() for item in payload.history],
+            message=payload.message,
+            token=token,
         )
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI chat agent failed.") from exc
 
-    final_message = result["messages"][-1]
-    content = getattr(final_message, "content", "")
-    if isinstance(content, list):
-        content = " ".join(str(item) for item in content)
-
-    return ChatResponse(response=str(content).strip() or "I could not generate a response.")
+    return ChatResponse(response=response_text.strip() or "I could not generate a response.")
 
 
 if __name__ == "__main__":
