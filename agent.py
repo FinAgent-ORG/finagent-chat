@@ -156,9 +156,8 @@ async def _extract_expense_from_message(message: str) -> dict | None:
             missing_fields.append("amount")
         amount = None
 
-    if not description:
-        if "description" not in missing_fields:
-            missing_fields.append("description")
+    if not description and "description" not in missing_fields:
+        missing_fields.append("description")
 
     return {
         "amount": amount,
