@@ -9,18 +9,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /home/nonroot/app
 
-COPY --chown=nonroot:nonroot requirements.txt ./
+COPY --chown=nonroot:nonroot --chmod=0444 requirements.txt ./
 
 RUN python -m venv "${VENV_PATH}" \
     && python -m pip install --upgrade pip \
     && python -m pip install -r requirements.txt
 
-COPY --chown=nonroot:nonroot agent.py ./
-COPY --chown=nonroot:nonroot clients.py ./
-COPY --chown=nonroot:nonroot main.py ./
-COPY --chown=nonroot:nonroot prompts.py ./
-COPY --chown=nonroot:nonroot schemas.py ./
-COPY --chown=nonroot:nonroot security.py ./
+COPY --chown=nonroot:nonroot --chmod=0444 agent.py ./
+COPY --chown=nonroot:nonroot --chmod=0444 clients.py ./
+COPY --chown=nonroot:nonroot --chmod=0444 main.py ./
+COPY --chown=nonroot:nonroot --chmod=0444 prompts.py ./
+COPY --chown=nonroot:nonroot --chmod=0444 schemas.py ./
+COPY --chown=nonroot:nonroot --chmod=0444 security.py ./
 
 RUN chmod -R a=rX /home/nonroot/app /home/nonroot/venv
 
@@ -33,8 +33,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /home/nonroot/app
 
-COPY --from=builder --chown=nonroot:nonroot /home/nonroot/venv /home/nonroot/venv
-COPY --from=builder --chown=nonroot:nonroot /home/nonroot/app /home/nonroot/app
+COPY --from=builder --chown=nonroot:nonroot --chmod=0555 /home/nonroot/venv /home/nonroot/venv
+COPY --from=builder --chown=nonroot:nonroot --chmod=0555 /home/nonroot/app /home/nonroot/app
 
 USER nonroot
 
