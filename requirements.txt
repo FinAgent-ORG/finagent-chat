@@ -1,8 +1,7 @@
-fastapi==0.116.1
+fastapi==0.135.2
 httpx==0.28.1
-langchain-core==0.3.79
-langchain-ollama==0.3.10
-langgraph==0.6.8
-PyJWT==2.10.1
-python-dotenv==1.1.1
+langchain-core==1.2.28
+langchain-ollama==1.1.0
+PyJWT==2.12.1
+python-dotenv==1.2.2
 uvicorn==0.38.0

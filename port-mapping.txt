@@ -1,0 +1,3 @@
+service=finagent-chat-service
+container_port=8004
+app_entrypoint=app.main:app

@@ -6,11 +6,14 @@ from typing import Iterable
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 
-from clients import create_expense, list_expenses, list_expenses_by_date
-from prompts import SYSTEM_PROMPT_CHAT
+from .clients import create_expense, list_expenses, list_expenses_by_date
+from .prompts import SYSTEM_PROMPT_CHAT
 
 CATEGORY_ALIASES = {
     "coffee": "Food",
+    "tea": "Food",
+    "cafe": "Food",
+    "restaurant": "Food",
     "breakfast": "Food",
     "lunch": "Food",
     "dinner": "Food",
@@ -20,21 +23,33 @@ CATEGORY_ALIASES = {
     "ola": "Transport",
     "bus": "Transport",
     "train": "Transport",
+    "metro": "Transport",
     "fuel": "Transport",
     "petrol": "Transport",
+    "diesel": "Transport",
+    "parking": "Transport",
+    "toll": "Transport",
     "electricity": "Utilities",
     "water": "Utilities",
     "internet": "Utilities",
     "wifi": "Utilities",
+    "gas": "Utilities",
+    "bill": "Utilities",
     "movie": "Entertainment",
     "netflix": "Entertainment",
     "spotify": "Entertainment",
+    "game": "Entertainment",
+    "concert": "Entertainment",
     "grocery": "Groceries",
     "groceries": "Groceries",
+    "vegetables": "Groceries",
+    "milk": "Groceries",
+    "supermarket": "Groceries",
     "rent": "Rent",
     "doctor": "Healthcare",
     "hospital": "Healthcare",
     "medicine": "Healthcare",
+    "pharmacy": "Healthcare",
 }
 DATE_PATTERN = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 HISTORY_KEYWORDS = (
@@ -121,15 +136,30 @@ def _format_expenses(expenses: Iterable[dict]) -> str:
     return "\n".join(lines)
 
 
+async def _fetch_context_expenses(message: str, token: str) -> list[dict]:
+    try:
+        target_date = _extract_date(message)
+        if target_date:
+            return await list_expenses_by_date(token, target_date)
+        return await list_expenses(token, days=30)
+    except Exception:
+        return []
+
+
 async def _extract_expense_from_message(message: str) -> dict | None:
     prompt = (
         "You extract structured expense data from a user message.\n"
         "Return strict JSON only with this schema:\n"
         '{"amount": 12.5, "category": "Food", "description": "coffee", "currency": "INR", "missing_fields": []}\n'
         "Valid categories only: Food, Transport, Utilities, Entertainment, Groceries, Rent, Healthcare, Other.\n"
+        "Infer the most likely category from the item, merchant, or context when possible.\n"
+        "Use Other only when no allowed category fits.\n"
+        "Infer a short natural description from the purchase when possible.\n"
+        "Infer currency from symbols or explicit codes when present. Supported examples include INR, USD, EUR, GBP.\n"
         "If amount is missing, set it to null and include \"amount\" in missing_fields.\n"
         "If description is missing, set a concise sensible description when possible; otherwise use null and include \"description\".\n"
         "Default currency to INR.\n"
+        "Do not ask questions.\n"
         "Do not return markdown."
     )
     response = await LLM.ainvoke([SystemMessage(content=prompt), HumanMessage(content=message)])
@@ -146,9 +176,8 @@ async def _extract_expense_from_message(message: str) -> dict | None:
             missing_fields.append("amount")
         amount = None
 
-    if not description:
-        if "description" not in missing_fields:
-            missing_fields.append("description")
+    if not description and "description" not in missing_fields:
+        missing_fields.append("description")
 
     return {
         "amount": amount,
@@ -162,19 +191,11 @@ async def _extract_expense_from_message(message: str) -> dict | None:
 async def _answer_with_context(history: list[dict], message: str, token: str) -> str:
     context = ""
     if _looks_like_history_request(message):
-        try:
-            target_date = _extract_date(message)
-            expenses = await (list_expenses_by_date(token, target_date) if target_date else list_expenses(token, days=30))
-        except Exception:
-            expenses = []
-
-        if expenses:
-            context = (
-                "Use the following real expense data when answering. Do not invent any records.\n"
-                f"{_format_expenses(expenses)}"
-            )
-        else:
-            context = "No matching expense records were found."
+        expenses = await _fetch_context_expenses(message, token)
+        context = (
+            "Use the following real expense data when answering. Do not invent any records.\n"
+            f"{_format_expenses(expenses)}"
+        ) if expenses else "No matching expense records were found."
 
     messages: list = [SystemMessage(content=SYSTEM_PROMPT_CHAT)]
     if context:
@@ -192,44 +213,52 @@ async def _answer_with_context(history: list[dict], message: str, token: str) ->
     return content.strip() or "I could not generate a response."
 
 
-async def handle_chat(history: list[dict], message: str, token: str) -> str:
+async def _handle_history_request(history: list[dict], message: str, token: str) -> str:
     target_date = _extract_date(message)
-    if target_date and _looks_like_history_request(message):
+    if target_date:
         expenses = await list_expenses_by_date(token, target_date)
         if not expenses:
             return f"No expenses found on {target_date}."
         return _format_expenses(expenses)
 
+    expenses = await list_expenses(token, days=30)
+    if not expenses:
+        return "No expenses found."
+    return await _answer_with_context(history, message, token)
+
+
+async def _handle_save_request(message: str, token: str) -> str:
+    try:
+        extracted = await _extract_expense_from_message(message)
+    except Exception:
+        extracted = None
+    if not extracted:
+        return "I could not understand that expense yet. Please include the amount and a short description."
+
+    missing_fields = extracted["missing_fields"]
+    if "amount" in missing_fields:
+        return "I can save that expense once you tell me the amount."
+    if "description" in missing_fields:
+        return "I can save that expense once you add a short description."
+
+    expense = await create_expense(
+        token=token,
+        amount=float(extracted["amount"]),
+        category=extracted["category"],
+        description=str(extracted["description"]).strip()[:500],
+        currency=str(extracted["currency"] or "INR"),
+    )
+    return (
+        f"Saved expense {expense['amount']:.2f} {expense['currency']} "
+        f"for {expense['description']} in category {expense['category']}."
+    )
+
+
+async def handle_chat(history: list[dict], message: str, token: str) -> str:
     if _looks_like_history_request(message) and not _looks_like_save_request(message):
-        expenses = await list_expenses(token, days=30)
-        if not expenses:
-            return "No expenses found."
-        return await _answer_with_context(history, message, token)
+        return await _handle_history_request(history, message, token)
 
     if _looks_like_save_request(message):
-        try:
-            extracted = await _extract_expense_from_message(message)
-        except Exception:
-            extracted = None
-        if not extracted:
-            return "I could not understand that expense yet. Please include the amount and a short description."
-
-        missing_fields = extracted["missing_fields"]
-        if "amount" in missing_fields:
-            return "I can save that expense once you tell me the amount."
-        if "description" in missing_fields:
-            return "I can save that expense once you add a short description."
-
-        expense = await create_expense(
-            token=token,
-            amount=float(extracted["amount"]),
-            category=extracted["category"],
-            description=str(extracted["description"]).strip()[:500],
-            currency=str(extracted["currency"] or "INR"),
-        )
-        return (
-            f"Saved expense {expense['amount']:.2f} {expense['currency']} "
-            f"for {expense['description']} in category {expense['category']}."
-        )
+        return await _handle_save_request(message, token)
 
     return await _answer_with_context(history, message, token)
