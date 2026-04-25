@@ -11,6 +11,9 @@ from .prompts import SYSTEM_PROMPT_CHAT
 
 CATEGORY_ALIASES = {
     "coffee": "Food",
+    "tea": "Food",
+    "cafe": "Food",
+    "restaurant": "Food",
     "breakfast": "Food",
     "lunch": "Food",
     "dinner": "Food",
@@ -20,21 +23,33 @@ CATEGORY_ALIASES = {
     "ola": "Transport",
     "bus": "Transport",
     "train": "Transport",
+    "metro": "Transport",
     "fuel": "Transport",
     "petrol": "Transport",
+    "diesel": "Transport",
+    "parking": "Transport",
+    "toll": "Transport",
     "electricity": "Utilities",
     "water": "Utilities",
     "internet": "Utilities",
     "wifi": "Utilities",
+    "gas": "Utilities",
+    "bill": "Utilities",
     "movie": "Entertainment",
     "netflix": "Entertainment",
     "spotify": "Entertainment",
+    "game": "Entertainment",
+    "concert": "Entertainment",
     "grocery": "Groceries",
     "groceries": "Groceries",
+    "vegetables": "Groceries",
+    "milk": "Groceries",
+    "supermarket": "Groceries",
     "rent": "Rent",
     "doctor": "Healthcare",
     "hospital": "Healthcare",
     "medicine": "Healthcare",
+    "pharmacy": "Healthcare",
 }
 DATE_PATTERN = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 HISTORY_KEYWORDS = (
@@ -137,9 +152,14 @@ async def _extract_expense_from_message(message: str) -> dict | None:
         "Return strict JSON only with this schema:\n"
         '{"amount": 12.5, "category": "Food", "description": "coffee", "currency": "INR", "missing_fields": []}\n'
         "Valid categories only: Food, Transport, Utilities, Entertainment, Groceries, Rent, Healthcare, Other.\n"
+        "Infer the most likely category from the item, merchant, or context when possible.\n"
+        "Use Other only when no allowed category fits.\n"
+        "Infer a short natural description from the purchase when possible.\n"
+        "Infer currency from symbols or explicit codes when present. Supported examples include INR, USD, EUR, GBP.\n"
         "If amount is missing, set it to null and include \"amount\" in missing_fields.\n"
         "If description is missing, set a concise sensible description when possible; otherwise use null and include \"description\".\n"
         "Default currency to INR.\n"
+        "Do not ask questions.\n"
         "Do not return markdown."
     )
     response = await LLM.ainvoke([SystemMessage(content=prompt), HumanMessage(content=message)])
