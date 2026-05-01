@@ -6,51 +6,10 @@ from typing import Iterable
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 
+from .categories import BUSINESS_CATEGORIES, DEFAULT_CATEGORY, CATEGORY_ALIASES, normalize_expense_category
 from .clients import create_expense, list_expenses, list_expenses_by_date
 from .prompts import SYSTEM_PROMPT_CHAT
 
-CATEGORY_ALIASES = {
-    "coffee": "Food",
-    "tea": "Food",
-    "cafe": "Food",
-    "restaurant": "Food",
-    "breakfast": "Food",
-    "lunch": "Food",
-    "dinner": "Food",
-    "snack": "Food",
-    "taxi": "Transport",
-    "uber": "Transport",
-    "ola": "Transport",
-    "bus": "Transport",
-    "train": "Transport",
-    "metro": "Transport",
-    "fuel": "Transport",
-    "petrol": "Transport",
-    "diesel": "Transport",
-    "parking": "Transport",
-    "toll": "Transport",
-    "electricity": "Utilities",
-    "water": "Utilities",
-    "internet": "Utilities",
-    "wifi": "Utilities",
-    "gas": "Utilities",
-    "bill": "Utilities",
-    "movie": "Entertainment",
-    "netflix": "Entertainment",
-    "spotify": "Entertainment",
-    "game": "Entertainment",
-    "concert": "Entertainment",
-    "grocery": "Groceries",
-    "groceries": "Groceries",
-    "vegetables": "Groceries",
-    "milk": "Groceries",
-    "supermarket": "Groceries",
-    "rent": "Rent",
-    "doctor": "Healthcare",
-    "hospital": "Healthcare",
-    "medicine": "Healthcare",
-    "pharmacy": "Healthcare",
-}
 DATE_PATTERN = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 HISTORY_KEYWORDS = (
     "expense",
@@ -150,10 +109,10 @@ async def _extract_expense_from_message(message: str) -> dict | None:
     prompt = (
         "You extract structured expense data from a user message.\n"
         "Return strict JSON only with this schema:\n"
-        '{"amount": 12.5, "category": "Food", "description": "coffee", "currency": "INR", "missing_fields": []}\n'
-        "Valid categories only: Food, Transport, Utilities, Entertainment, Groceries, Rent, Healthcare, Other.\n"
+        '{"amount": 12.5, "category": "Operational", "description": "team coffee", "currency": "INR", "missing_fields": []}\n'
+        f"Valid categories only: {', '.join(BUSINESS_CATEGORIES)}.\n"
         "Infer the most likely category from the item, merchant, or context when possible.\n"
-        "Use Other only when no allowed category fits.\n"
+        f"Use {DEFAULT_CATEGORY} only when no allowed category fits.\n"
         "Infer a short natural description from the purchase when possible.\n"
         "Infer currency from symbols or explicit codes when present. Supported examples include INR, USD, EUR, GBP.\n"
         "If amount is missing, set it to null and include \"amount\" in missing_fields.\n"
@@ -166,7 +125,7 @@ async def _extract_expense_from_message(message: str) -> dict | None:
     content = response.content if isinstance(response.content, str) else str(response.content)
     parsed = json.loads(_clean_json_response(content))
 
-    category = parsed.get("category") or _infer_category_from_text(message) or "Other"
+    category = normalize_expense_category(parsed.get("category") or _infer_category_from_text(message))
     missing_fields = [str(item) for item in parsed.get("missing_fields", []) if str(item).strip()]
     amount = parsed.get("amount")
     description = parsed.get("description")
