@@ -28,11 +28,13 @@ class ChatResponse(BaseModel):
 
 
 class ExpenseCategory(str, Enum):
-    FOOD = "Food"
-    TRANSPORT = "Transport"
+    OPERATIONAL = "Operational"
+    INVENTORY = "Inventory"
+    EMPLOYEE = "Employee"
+    LOGISTICS = "Logistics"
+    MARKETING = "Marketing"
+    SOFTWARE = "Software"
     UTILITIES = "Utilities"
-    ENTERTAINMENT = "Entertainment"
-    GROCERIES = "Groceries"
-    RENT = "Rent"
-    HEALTHCARE = "Healthcare"
-    OTHER = "Other"
+    TRAVEL = "Travel"
+    COMPLIANCE = "Compliance"
+    MISCELLANEOUS = "Miscellaneous"
